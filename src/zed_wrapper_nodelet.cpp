@@ -51,6 +51,7 @@
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2_ros/transform_broadcaster.h>
 #include <geometry_msgs/TransformStamped.h>
+#include <geometry_msgs/PoseStamped.h>
 
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
@@ -109,6 +110,7 @@ namespace zed_wrapper {
         ros::Publisher pub_right_cam_info_raw;
         ros::Publisher pub_depth_cam_info;
         ros::Publisher pub_odom;
+        ros::Publisher pub_vision_position_estimate;
 
         // tf
         tf2_ros::TransformBroadcaster transform_odom_broadcaster;
@@ -118,6 +120,7 @@ namespace zed_wrapper {
         std::string depth_frame_id;
         std::string cloud_frame_id;
         std::string odometry_frame_id;
+        std::string vision_frame_id;
         std::string base_frame_id;
         std::string camera_frame_id;
         // initialization Transform listener
@@ -310,6 +313,31 @@ namespace zed_wrapper {
             odom.pose.pose.orientation.w = base2.rotation.w;
             // Publish odometry message
             pub_odom.publish(odom);
+        }
+
+        /* \brief Publish the pose of the camera with a ros Publisher
+         * \param base_transform : Transformation representing the camera pose from base frame
+         * \param pub_vison_position_estimate : the publisher object to use
+         * \param odom_frame_id : the id of the reference frame of the pose
+         * \param t : the ros::Time to stamp the image
+         */
+        void publishVisionPositionEstimate(tf2::Transform base_transform, ros::Publisher &pub_vision_position_estimate, string vision_frame_id, ros::Time t) {
+            geometry_msgs::PoseStamped pose;
+            pose.header.stamp = t;
+            pose.header.frame_id = vision_frame_id; // vision_frame
+            //pose.child_frame_id = base_frame_id; // base_frame
+            // conversion from Tranform to message
+            geometry_msgs::Transform base2 = tf2::toMsg(base_transform);
+            // Add all value in visual position message
+            pose.pose.pose.position.x = base2.translation.x;
+            pose.pose.pose.position.y = base2.translation.y;
+            pose.pose.pose.position.z = base2.translation.z;
+            pose.pose.pose.orientation.x = base2.rotation.x;
+            pose.pose.pose.orientation.y = base2.rotation.y;
+            pose.pose.pose.orientation.z = base2.rotation.z;
+            pose.pose.pose.orientation.w = base2.rotation.w;
+            // Publish visual position message
+            pub_vision_position_estimate.publish(pose);
         }
 
         /* \brief Publish the pose of the camera as a transformation
@@ -558,25 +586,26 @@ namespace zed_wrapper {
                 int depth_SubNumber = pub_depth.getNumSubscribers();
                 int cloud_SubNumber = pub_cloud.getNumSubscribers();
                 int odom_SubNumber = pub_odom.getNumSubscribers();
-                bool runLoop = (rgb_SubNumber + rgb_raw_SubNumber + left_SubNumber + left_raw_SubNumber + right_SubNumber + right_raw_SubNumber + depth_SubNumber + cloud_SubNumber + odom_SubNumber) > 0;
+                int vision_SubNumber = pub_vision_position_estimate.getNumSubscribers();
+                bool runLoop = (rgb_SubNumber + rgb_raw_SubNumber + left_SubNumber + left_raw_SubNumber + right_SubNumber + right_raw_SubNumber + depth_SubNumber + cloud_SubNumber + odom_SubNumber + vision_SubNumber) > 0;
 
                 runParams.enable_point_cloud = false;
                 if (cloud_SubNumber > 0)
                     runParams.enable_point_cloud = true;
                 // Run the loop only if there is some subscribers
                 if (runLoop) {
-                    if ((depth_stabilization || odom_SubNumber > 0) && !tracking_activated) { //Start the tracking
+                    if ((depth_stabilization || odom_SubNumber || vision_SubNumber > 0) && !tracking_activated) { //Start the tracking
                         if (odometry_DB != "" && !file_exist(odometry_DB)) {
                             odometry_DB = "";
                             NODELET_WARN("odometry_DB path doesn't exist or is unreachable.");
                         }
                         zed.enableTracking(trackParams);
                         tracking_activated = true;
-                    } else if (!depth_stabilization && odom_SubNumber == 0 && tracking_activated) { //Stop the tracking
+                    } else if (!depth_stabilization && odom_SubNumber && vision_SubNumber == 0 && tracking_activated) { //Stop the tracking
                         zed.disableTracking();
                         tracking_activated = false;
                     }
-                    computeDepth = (depth_SubNumber + cloud_SubNumber + odom_SubNumber) > 0; // Detect if one of the subscriber need to have the depth information
+                    computeDepth = (depth_SubNumber + cloud_SubNumber + odom_SubNumber + vision_SubNumber) > 0; // Detect if one of the subscriber need to have the depth information
                     ros::Time t = ros::Time::now(); // Get current time
 
                     grabbing = true;
@@ -752,6 +781,29 @@ namespace zed_wrapper {
                         publishOdom(base_transform, pub_odom, odometry_frame_id, t);
                     }
 
+                    // Publish the visual position if someone has subscribed to
+                    if (vision_SubNumber > 0) {
+                        zed.getPosition(pose);
+                        // Transform ZED pose in TF2 Transformation
+                        tf2::Transform camera_transform;
+                        geometry_msgs::Transform c2s;
+                        sl::Translation translation = pose.getTranslation();
+                        c2s.translation.x = translation(2);
+                        c2s.translation.y = -translation(0);
+                        c2s.translation.z = -translation(1);
+                        sl::Orientation quat = pose.getOrientation();
+                        c2s.rotation.x = quat(2);
+                        c2s.rotation.y = -quat(0);
+                        c2s.rotation.z = -quat(1);
+                        c2s.rotation.w = quat(3);
+                        tf2::fromMsg(c2s, camera_transform);
+                        // Transformation from camera sensor to base frame
+                        base_transform = base_to_sensor * camera_transform * base_to_sensor.inverse();
+                        // Publish odometry message
+                        publishVisionPositionEstimate(base_transform, pub_vision_position_estimate, vision_frame_id, t);
+                    }
+
+
                     // Publish odometry tf only if enabled
                     if (publish_tf) {
                         //Note, the frame is published, but its values will only change if someone has subscribed to odom
@@ -857,6 +909,7 @@ namespace zed_wrapper {
             cloud_frame_id = camera_frame_id;
 
             string odometry_topic = "odom";
+            string vision_topic = "vision_position_estimate";
 
             nh_ns.getParam("rgb_topic", rgb_topic);
             nh_ns.getParam("rgb_raw_topic", rgb_raw_topic);
@@ -879,6 +932,7 @@ namespace zed_wrapper {
             nh_ns.getParam("point_cloud_topic", point_cloud_topic);
 
             nh_ns.getParam("odometry_topic", odometry_topic);
+            nh_ns.getParam("vision_topic", vision_topic);
 
             nh_ns.param<std::string>("svo_filepath", svo_filepath, std::string());
 
@@ -985,6 +1039,10 @@ namespace zed_wrapper {
             //Odometry publisher
             pub_odom = nh.advertise<nav_msgs::Odometry>(odometry_topic, 1);
             NODELET_INFO_STREAM("Advertized on topic " << odometry_topic);
+
+            //Vision Position Estimate publisher
+            pub_vision_position_estimate = nh.advertise<geometry_msgs::PoseStamped>(vision_topic, 1);
+            NODELET_INFO_STREAM("Advertized on topic " << vision_topic);
 
             device_poll_thread = boost::shared_ptr<boost::thread> (new boost::thread(boost::bind(&ZEDWrapperNodelet::device_poll, this)));
         }
