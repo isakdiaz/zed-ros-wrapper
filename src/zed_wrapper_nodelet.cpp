@@ -329,13 +329,13 @@ namespace zed_wrapper {
             // conversion from Tranform to message
             geometry_msgs::Transform base2 = tf2::toMsg(base_transform);
             // Add all value in visual position message
-            pose.pose.pose.position.x = base2.translation.x;
-            pose.pose.pose.position.y = base2.translation.y;
-            pose.pose.pose.position.z = base2.translation.z;
-            pose.pose.pose.orientation.x = base2.rotation.x;
-            pose.pose.pose.orientation.y = base2.rotation.y;
-            pose.pose.pose.orientation.z = base2.rotation.z;
-            pose.pose.pose.orientation.w = base2.rotation.w;
+            pose.pose.position.x = base2.translation.x;
+            pose.pose.position.y = base2.translation.y;
+            pose.pose.position.z = base2.translation.z;
+            pose.pose.orientation.x = base2.rotation.x;
+            pose.pose.orientation.y = base2.rotation.y;
+            pose.pose.orientation.z = base2.rotation.z;
+            pose.pose.orientation.w = base2.rotation.w;
             // Publish visual position message
             pub_vision_position_estimate.publish(pose);
         }
