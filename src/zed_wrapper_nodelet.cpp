@@ -328,6 +328,7 @@ namespace zed_wrapper {
             //pose.child_frame_id = base_frame_id; // base_frame
             // conversion from Tranform to message
             geometry_msgs::Transform base2 = tf2::toMsg(base_transform);
+            
             // Add all value in visual position message
             pose.pose.position.x = base2.translation.x;
             pose.pose.position.y = base2.translation.y;
