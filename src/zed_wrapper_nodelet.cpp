@@ -120,7 +120,6 @@ namespace zed_wrapper {
         std::string depth_frame_id;
         std::string cloud_frame_id;
         std::string odometry_frame_id;
-        std::string vision_frame_id;
         std::string base_frame_id;
         std::string camera_frame_id;
         // initialization Transform listener
@@ -321,14 +320,17 @@ namespace zed_wrapper {
          * \param odom_frame_id : the id of the reference frame of the pose
          * \param t : the ros::Time to stamp the image
          */
-        void publishVisionPositionEstimate(tf2::Transform base_transform, ros::Publisher &pub_vision_position_estimate, string vision_frame_id, ros::Time t) {
+        void publishVisionPositionEstimate(tf2::Transform base_transform, ros::Publisher &pub_vision_position_estimate, string odom_frame_id, ros::Time t) {
             geometry_msgs::PoseStamped pose;
             pose.header.stamp = t;
-            pose.header.frame_id = vision_frame_id; // vision_frame
-            //pose.child_frame_id = base_frame_id; // base_frame
+
+            pose.header.frame_id = odom_frame_id; // Use the same transform as odometry
+            pose.child_frame_id = base_frame_id; // base_frame
+
+
             // conversion from Tranform to message
             geometry_msgs::Transform base2 = tf2::toMsg(base_transform);
-            
+
             // Add all value in visual position message
             pose.pose.position.x = base2.translation.x;
             pose.pose.position.y = base2.translation.y;
@@ -784,6 +786,7 @@ namespace zed_wrapper {
 
                     // Publish the visual position if someone has subscribed to
                     if (vision_SubNumber > 0) {
+                        publish_tf = true;  //Odom transforms are published even when odom topic is not running
                         zed.getPosition(pose);
                         // Transform ZED pose in TF2 Transformation
                         tf2::Transform camera_transform;
@@ -801,7 +804,7 @@ namespace zed_wrapper {
                         // Transformation from camera sensor to base frame
                         base_transform = base_to_sensor * camera_transform * base_to_sensor.inverse();
                         // Publish odometry message
-                        publishVisionPositionEstimate(base_transform, pub_vision_position_estimate, vision_frame_id, t);
+                        publishVisionPositionEstimate(base_transform, pub_vision_position_estimate, odom_frame_id, t);
                     }
 
 
