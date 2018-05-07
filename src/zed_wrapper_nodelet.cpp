@@ -325,7 +325,7 @@ namespace zed_wrapper {
             pose.header.stamp = t;
 
             pose.header.frame_id = odom_frame_id; // Use the same transform as odometry
-            pose.child_frame_id = base_frame_id; // base_frame
+            // pose.child_frame_id = base_frame_id; // base_frame
 
 
             // conversion from Tranform to message
