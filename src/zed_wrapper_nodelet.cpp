@@ -577,6 +577,7 @@ namespace zed_wrapper {
 
 
             sl::Mat leftZEDMat, rightZEDMat, depthZEDMat;
+
             // Main loop
             while (nh_ns.ok()) {
                 // Check for subscribers
