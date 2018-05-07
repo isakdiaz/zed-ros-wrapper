@@ -805,7 +805,7 @@ namespace zed_wrapper {
                         // Transformation from camera sensor to base frame
                         base_transform = base_to_sensor * camera_transform * base_to_sensor.inverse();
                         // Publish odometry message
-                        publishVisionPositionEstimate(base_transform, pub_vision_position_estimate, odom_frame_id, t);
+                        publishVisionPositionEstimate(base_transform, pub_vision_position_estimate, odometry_frame_id, t);
                     }
 
 
